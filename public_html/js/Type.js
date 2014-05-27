@@ -1,5 +1,5 @@
-function Type()
+function Type(federalDistrict,region)
 {
-    this.federalDistrict = null;
-    this.region = null;
+    this.federalDistrict = federalDistrict;
+    this.region = region;
 }

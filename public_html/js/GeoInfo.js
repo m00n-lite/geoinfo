@@ -6,16 +6,10 @@
  **/
 var GeoInfo = Backbone.View.extend({
     instance: this,
-    latlngs: null,
-    name: null,
     /**
      * 0 is for weight, 1 mean
      */
     method: 0,
-    /**
-     Тип гео-объекта
-     */
-    type: new Type(),
     /**
      Конструктор, должен возвращать всегда один объект (синглетон)
      */
@@ -33,11 +27,31 @@ var GeoInfo = Backbone.View.extend({
      **/
     getInfo: function(name, type)
     {
-        this.name = name;
-        this.type = type;
+        if (isLocalStorageAvailable())
+        {
+            var sessObj = JSON.parse(sessionStorage.getItem(name));
 
+            if (sessObj)
+            {
+                sessObj.fromCache = true;
+                return sessObj;
+            }
+        }
+
+        /* No obj in sess storage */
+        var obj = this.sendQuery(name, type);
+
+        if (obj && isLocalStorageAvailable())
+        {
+            sessionStorage.setItem(name, JSON.stringify(obj));
+        }
+
+        return obj;
+    },
+    sendQuery: function(name, type)
+    {
         var url = 'http://nominatim.openstreetmap.org/search?format=json&polygon_geojson=1&bounded=1&q=';
-        url += encodeURIComponent(this.name);
+        url += encodeURIComponent(name);
         var xmlHttp = new XMLHttpRequest();
         xmlHttp.open("GET", url, false);
         xmlHttp.send(null);
@@ -46,25 +60,64 @@ var GeoInfo = Backbone.View.extend({
 
         if (json.length > 0)
         {
-            alert(json[0].display_name);
+            /* first result from search */
+            var jsonObj = json[0];
+            var geoJson = jsonObj.geojson;
+            var coords = geoJson.coordinates;
+            var polyType = geoJson.type;
+            var latlngs;
+            if (polyType === 'MultiPolygon')
+            {
+                latlngs = this.getMaxAreaPoly(coords)[0];
+            }
+            else if (polyType === 'Polygon')
+            {
+                latlngs = coords[0];
+            }
+            else
+            {
+                return false;
+            }
+
+            var center;
+            switch (this.method)
+            {
+                case 0:
+                    center = this.getCenterWeight(latlngs);
+                    break;
+                case 1:
+                    center = this.getCenterMean(latlngs);
+                    break;
+            }
+
+            var obj =
+                    {
+                        name: name,
+                        type: type,
+                        displayName: jsonObj.display_name,
+                        geoJson: geoJson,
+                        center: center,
+                        fromCache: false
+                    };
+            return obj;
         }
         else
         {
-            alert('no objects found');
+            return false;
         }
     },
     /**
      * Weight center method
      */
-    getCenterWeight: function()
+    getCenterWeight: function(latlngs)
     {
         var x = 0;
         var y = 0;
         var z = 0;
-        for (var i = 0; i < this.latlngs.length; i++)
+        for (var i = 0; i < latlngs.length; i++)
         {
-            var lat = this.latlngs[i][1];
-            var lon = this.latlngs[i][0];
+            var lat = latlngs[i][1];
+            var lon = latlngs[i][0];
             lat = lat * Math.PI / 180;
             lon = lon * Math.PI / 180;
             x += Math.cos(lat) * Math.cos(lon);
@@ -85,15 +138,15 @@ var GeoInfo = Backbone.View.extend({
     /**
      * Arithmetic mean center method
      */
-    getCenterMean: function()
+    getCenterMean: function(latlngs)
     {
         var lat, lon;
-        var count = this.latlngs.length;
+        var count = latlngs.length;
 
         for (var i = 0; i < count; i++)
         {
-            lat += this.latlngs[i][1];
-            lon += this.latlngs[i][0];
+            lat += latlngs[i][1];
+            lon += latlngs[i][0];
         }
 
         var latc = lat / count;
@@ -102,44 +155,55 @@ var GeoInfo = Backbone.View.extend({
 
         return c;
     },
-    getArea: function()
+    getArea: function(latlngs)
     {
         var lam1 = 0, lam2 = 0, beta1 = 0, beta2 = 0, cosB1 = 0, cosB2 = 0;
         var hav = 0;
         var sum = 0;
+        /* earth radius */
+        var r = 6371302;
 
         function haversine(x)
         {
             return (1.0 - Math.cos(x)) / 2.0;
         }
 
-        for (var j = 0; j < this.latlngs.length; j++)
+        function toRad(degs)
         {
-            var k = j + 1;
-            if (j === 0)
+            return degs * Math.PI / 180;
+        }
+
+//        /* Geojson poly is meant to be closed, excluding last coord */
+//        latlngs.pop();
+
+        for (var i = 0; i < latlngs.length; i++)
+        {
+
+            if (i === 0)
             {
-                lam1 = this.latlngs[i][0];
-                beta1 = this.latlngs[i][1];
-                lam2 = lngs[j + 1];
-                beta2 = lats[j + 1];
-                cosB1 = Math.Cos(beta1);
-                cosB2 = Math.Cos(beta2);
+                lam1 = toRad(latlngs[i][0]);
+                beta1 = toRad(latlngs[i][1]);
+                lam2 = toRad(latlngs[i + 1][0]);
+                beta2 = toRad(latlngs[i + 1][1]);
+                cosB1 = Math.cos(beta1);
+                cosB2 = Math.cos(beta2);
             }
             else
             {
-                k = (j + 1) % lats.Length;
+                var j = (i + 1) % latlngs.length;
                 lam1 = lam2;
                 beta1 = beta2;
-                lam2 = lngs[k];
-                beta2 = lats[k];
+                lam2 = toRad(latlngs[j][0]);
+                beta2 = toRad(latlngs[j][1]);
                 cosB1 = cosB2;
-                cosB2 = Math.Cos(beta2);
+                cosB2 = Math.cos(beta2);
             }
+
             if (lam1 !== lam2)
             {
                 hav = haversine(beta2 - beta1) +
                         cosB1 * cosB2 * haversine(lam2 - lam1);
-                var a = 2 * Math.asin(Math.Sqrt(hav));
+                var a = 2 * Math.asin(Math.sqrt(hav));
                 var b = Math.PI / 2 - beta2;
                 var c = Math.PI / 2 - beta1;
                 var s = 0.5 * (a + b + c);
@@ -155,6 +219,54 @@ var GeoInfo = Backbone.View.extend({
                 sum += excess;
             }
         }
-        return Math.Abs(sum) * r * r;
+        return Math.abs(sum) * r * r;
+    },
+    /**
+     * Gets multipolygon geojson returns max area poly coords array
+     */
+    getMaxAreaPoly: function(polys)
+    {
+        var areaMaps = [];
+        for (var i = 0; i < polys.length; i++)
+        {
+            var poly = polys[i];
+            var area;
+
+            /* simple poly */
+            if (poly.length === 1)
+            {
+                area = this.getArea(poly[0]);
+            }
+            /* poly with holes */
+            else
+            {
+                var ring = this.getArea(poly[0]);
+                var holes;
+
+                /* 1 element - first hole */
+                for (var i = 1; i < poly.length; i++)
+                {
+                    holes += this.getArea(poly[i]);
+                }
+
+                area = ring - holes;
+            }
+            console.log(i + ' :' + area);
+            /* area to key mapping */
+            var areaMap =
+                    {
+                        key: i,
+                        val: area
+                    };
+            areaMaps.push(areaMap);
+        }
+
+        var sortRule = function(a, b) {
+            return a.val - b.val;
+        };
+        areaMaps.sort(sortRule);
+        var pop = areaMaps.pop();
+        alert('maxarea ' + pop.key + ' area= ' + pop.val);
+        return polys[pop.key];
     }
 });

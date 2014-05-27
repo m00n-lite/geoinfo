@@ -17,6 +17,7 @@ and open the template in the editor.
         <script src="js/libs/jquery/jquery.js"></script>
         <script src="js/libs/underscore.js/underscore.js"></script>
         <script src="js/libs/backbone.js/backbone.js"></script>
+        <script src="js/Utils.js"></script>
         <script src="js/Type.js"></script>
         <script src="js/GeoInfo.js"></script>
     </head>
@@ -24,12 +25,20 @@ and open the template in the editor.
 
         <h3>Search</h3>
         <span id="incache">0</span> objects in cache<br><br>
-        <input type="text" placeholder="Geo object" id="name"><button id="bSearch">Search</button>
-        <hr>
+        <input type="text" placeholder="Geo object query" id="query"><button id="bSearch">Search</button>
 
-        <h3>Result</h3>
+        <div id="inProgress" style="display:none; margin-top: 20px;">Query is being sent...</div>
 
-        <div id="result"></div>
+        <div id="result" style="display:none;">
+            <hr>
+            <h3>Result</h3>
+
+            <div>Query: <span id="displayQuery"></span></div>
+            <div>Display name: <span id="displayName"></span></div>
+            <div>Polygon type: <span id="polygonType"></span></div>
+            <div>Center: <span id="center"></span></div>
+            <div>From cache: <span id="fromCache"></span></div>
+        </div>
 
         <script src="js/main.js"></script>
     </body>
