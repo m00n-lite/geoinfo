@@ -140,7 +140,7 @@ var GeoInfo = Backbone.View.extend({
      */
     getCenterMean: function(latlngs)
     {
-        var lat, lon;
+        var lat =0, lon=0;
         var count = latlngs.length;
 
         for (var i = 0; i < count; i++)
@@ -230,7 +230,7 @@ var GeoInfo = Backbone.View.extend({
         for (var i = 0; i < polys.length; i++)
         {
             var poly = polys[i];
-            var area;
+            var area = 0;
 
             /* simple poly */
             if (poly.length === 1)
@@ -241,17 +241,16 @@ var GeoInfo = Backbone.View.extend({
             else
             {
                 var ring = this.getArea(poly[0]);
-                var holes;
+                var holes = 0;
 
                 /* 1 element - first hole */
-                for (var i = 1; i < poly.length; i++)
+                for (var j = 1; j < poly.length; j++)
                 {
-                    holes += this.getArea(poly[i]);
+                    holes += this.getArea(poly[j]);
                 }
 
                 area = ring - holes;
             }
-            console.log(i + ' :' + area);
             /* area to key mapping */
             var areaMap =
                     {
@@ -266,7 +265,6 @@ var GeoInfo = Backbone.View.extend({
         };
         areaMaps.sort(sortRule);
         var pop = areaMaps.pop();
-        alert('maxarea ' + pop.key + ' area= ' + pop.val);
         return polys[pop.key];
     }
 });
